@@ -11,7 +11,11 @@ dotenv_path = join(dirname(__file__), '.env')
 load_dotenv(dotenv_path)
 gmt8 = timezone(timedelta(hours=8))
 
-exchange = ccxt.binance()
+exchange = ccxt.binance({
+    'options': {
+        'defaultType': 'future'
+    }
+})
 exchange.apiKey = os.environ.get("CXAPIKEY")
 exchange.secret = os.environ.get("CXSECRETKEY")
 exchange.enableRateLimit = True
@@ -25,7 +29,6 @@ exchange.load_markets()
 # Create a TelegramClient using your API ID and API hash
 client = TelegramClient('danielTeleSession', api_id, api_hash).start()
 lastMsgId = 0
-
 
 # TradingView Alert is sent to this Telegram Bot via WebHook.
 bot_id=5685940104
@@ -42,32 +45,22 @@ def getCurrPosition(signalMsg):
     position = abs(float(signalMsg.split(" ")[-1]))
     return position
 
-#stopLossPrice = 0.05
-#takeProfitPrice = 0.2
-#order = exchange.create_order("BTCUSDT", 'market', 'buy', 0.001)
-#print(order)
-#sl = exchange.create_order("BTCUSDT", 'market', 'sell', 0.001, None, {'stopPrice': stopLossPrice, "reduceOnly": True})
-#print(sl)
-#tp = exchange.create_order("BTCUSDT", 'market', 'sell', 0.001, None, {'stopPrice': takeProfitPrice, "reduceOnly": True})
-#print(tp)
+# stopLossPrice = 0.05
+# takeProfitPrice = 0.2
+# order = exchange.create_order("BTCUSDT", 'market', 'buy', 0.001)
+# print(order)
+# sl = exchange.create_order("BTCUSDT", 'market', 'sell', 0.001, None, {'stopPrice': stopLossPrice, "reduceOnly": True})
+# print(sl)
+# tp = exchange.create_order("BTCUSDT", 'market', 'sell', 0.001, None, {'stopPrice': takeProfitPrice, "reduceOnly": True})
+# print(tp)
 
 async def main(lastMsgId):
-    buyPrice = 0
-    qtyBrought = 0
-    sellPrice = 0
-    takeProfitPrice = 999999
-    while True:
-        # Get the ticker for BTCUSDT
-        ticker = exchange.fetch_ticker('BTC/USDT')
-        # Get the current price of BTCUSDT
-        btcCurrentPrice = ticker['close']
 
-        # Print the price
-        # print(btcCurrentPrice)
+    while True:
         # Read the last msg that TradingView Alert sent to the TelegramBot via WebHook
         last_messages = await client(GetHistoryRequest(
             peer=bot_id,
-            limit=2,
+            limit=1,
             offset_date=None,
             offset_id=0,
             max_id=0,
@@ -87,7 +80,6 @@ async def main(lastMsgId):
         # print(str(getCurrent))
         # print(str(getQty) + " : " + str(getCurrPos))
         # print(str(msgId) + " : " + signalMsg)
-        print("Buy Price : " + str(buyPrice) + " Current Price: " + str(btcCurrentPrice))
 
         tolerance = timedelta(minutes=1)
         if getCurrent - tolerance <= msgDateTime <= getCurrent + tolerance:
@@ -96,25 +88,16 @@ async def main(lastMsgId):
             if lastMsgId != msgId:
                 lastMsgId = msgId
                 if "BTCUSDT" in signalMsg:
-                    if "buy" in signalMsg:
+                    if "long" in signalMsg:
                         order = exchange.create_order("BTCUSDT", 'market', 'buy', getQty, None)
-                        buyPrice = round(float(order["info"]["fills"][0]["price"]),2)
-                        # qtyBrought = int(order["info"]["origQty"])
-                        # takeProfitPrice = buyPrice * 0.01 + buyPrice
-                        print("Buying " +  str(getQty) + " @ " + str(buyPrice) + " BTCUSDT: " + str(order))
-                        await client.send_message(bot_id, 'Brought ' +  str(getQty) + " @ " + str(buyPrice))
-                    if "sell" in signalMsg:
+                        print("Buying " +  str(getQty) + "BTCUSDT: " + str(order))
+                    if "short" in signalMsg:
                         order = exchange.create_order("BTCUSDT", 'market', 'sell', getQty, None)
-                        sellPrice = round(float(order["info"]["fills"][0]["price"]),2)
-                        print("Selling " +  str(getQty) + " @ " + str(sellPrice) + " BTCUSDT: " + str(order))
-                        await client.send_message(bot_id, 'Sold ' +  str(getQty) + " @ " + str(sellPrice))
-        
-        # if btcCurrentPrice < takeProfitPrice and takeProfitPrice != 999999:
-        #     order = exchange.create_order("BTCUSDT", 'market', 'sell', qtyBrought, None)
-        #     currentPrice = round(float(order["info"]["fills"][0]["price"]),2)
-        #     await client.send_message(bot_id, 'Took profit on ' +  str(qtyBrought) + " @ " + str(currentPrice))
+                        print("Selling " +  str(getQty) + "BTCUSDT: " + str(order))
 
-        await asyncio.sleep(0.2)
+
+
+        await asyncio.sleep(0.5)
 
 
 with client:
